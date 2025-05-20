@@ -1,16 +1,16 @@
 本文档描述croco模型的导出过程。
 
-1. 从github clone源码  
+## 1. 从github clone源码  
 ```
 git clone git@github.com:techshoww/croco.git
 ```
 
-2. 新建export分支   
+## 2. 新建export分支   
 ```
 git checkout -b export  
 ```
 
-3. 安装python环境  
+## 3. 安装python环境  
 
 ```
 conda create -n croco  python=3.10.15 -y
@@ -18,13 +18,13 @@ conda install pytorch torchvision -c pytorch
 pip install onnx==1.17.0 onnxruntime==1.20.1 onnx-simplifier==0.4.36
 ```
 
-3. 下载pth模型  
+## 4. 下载pth模型  
 这里选用了最基础的模型
 ```
 wget https://download.europe.naverlabs.com/ComputerVision/CroCo/CroCo.pth
 ```
 
-4. 修改mask的实现方式，规避NonZero算子  
+## 5. 修改mask的实现方式，规避NonZero算子  
 ```
 x = x[~masks].view(B, -1, C)
 posvis = pos[~masks].view(B, -1, 2)
@@ -77,7 +77,7 @@ x = x[:,nonmasks,:].view(B,-1,C)
 ```
 变量名mask，给为nonmask即可。
 
-5. 替换 einsum 算子  
+## 6. 替换 einsum 算子  
 这个函数中出现了 einsum 算子,需要用 permute 替换掉    
 ```
 x = torch.einsum('nchpwq->nhwpqc', x)
@@ -87,7 +87,7 @@ x = torch.einsum('nchpwq->nhwpqc', x)
 x = x.permute(0,2,4,3,5,1)
 ```
 
-6. 导出 onnx 
+## 7. 导出 onnx 
 
 (1). 导出onnx 
 ```
@@ -104,13 +104,13 @@ python demo_onnx.py
 python demo.py
 ```
 
-7. 编译onnx  
+## 8. 编译onnx  
 进入工具链环境，执行  
 ```
 bash build.sh
 ```
 
-8. 开发板运行axmodel  
+## 9. 开发板运行axmodel  
 ```
 ax_run_model -m croco.axmodel -w 10 -r 100
 ```
