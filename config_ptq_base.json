@@ -1,0 +1,24 @@
+{
+    "model_type": "ONNX",
+    "npu_mode": "NPU3",
+    "quant": {
+      "input_configs": [
+        {
+          "tensor_name": "DEFAULT",
+          "calibration_dataset": "s3://npu-ci/data/data.zip"
+        }
+      ],
+      "calibration_method": "MinMax"
+    },
+    "input_processors": [
+      {
+        "tensor_name": "DEFAULT",
+        "tensor_format": "BGR",
+        "tensor_layout": "NCHW"
+      }
+    ],
+    "compiler": {
+      "check": 2
+    }
+  }
+  

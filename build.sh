@@ -1,0 +1,1 @@
+pulsar2 build --input croco.onnx --config config_ptq_base.json --output_dir build-output --output_name croco.axmodel --target_hardware AX650 --compiler.check 2

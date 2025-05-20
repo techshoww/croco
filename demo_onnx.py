@@ -6,10 +6,11 @@ from models.croco import CroCoNet
 from PIL import Image
 import torchvision.transforms
 from torchvision.transforms import ToTensor, Normalize, Compose
+import onnxruntime as ort
+import numpy as np 
 
 def main():
-    device = torch.device('cuda:0' if torch.cuda.is_available() and torch.cuda.device_count()>0 else 'cpu')
-    
+    device = torch.device("cpu")
     # load 224x224 images and transform them to tensor 
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_mean_tensor = torch.tensor(imagenet_mean).view(1,3,1,1).to(device, non_blocking=True)
@@ -25,10 +26,14 @@ def main():
     model.eval()
     msg = model.load_state_dict(ckpt['model'], strict=True)
     
+    session = ort.InferenceSession("croco.onnx")
     # forward 
     with torch.inference_mode():
+        # out, mask, target = model(image1, image2)
         nonmask, mask = model.mask_generator(image1)
-        out,  target = model(image1, image2, nonmask)
+        out, target = session.run(["out",  "target"], input_feed={"img1":image1.cpu().numpy(), "img2":image2.cpu().numpy(), "nonmask":nonmask.cpu().numpy()})
+        out = torch.from_numpy(out).to(device)
+        target = torch.from_numpy(target).to(device)
         
     # the output is normalized, thus use the mean/std of the actual image to go back to RGB space 
     patchified = model.patchify(image1)
@@ -47,7 +52,7 @@ def main():
     B, C, H, W = visualization.shape
     visualization = visualization.permute(1, 0, 2, 3).reshape(C, B*H, W)
     visualization = torchvision.transforms.functional.to_pil_image(torch.clamp(visualization, 0, 1))
-    fname = "demo_output_CroCo.png"
+    fname = "demo_output_CroCo_onnx.png"
     visualization.save(fname)
     print('Visualization save in '+fname)
     

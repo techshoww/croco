@@ -21,5 +21,6 @@ class RandomMask(nn.Module):
     
     def __call__(self, x):
         noise = torch.rand(x.size(0), self.num_patches, device=x.device) 
-        argsort = torch.argsort(noise, dim=1) 
-        return argsort < self.num_mask
+        argsort = torch.argsort(noise, dim=1)
+        # return argsort < self.num_mask
+        return argsort[:, self.num_mask:].reshape(-1), argsort < self.num_mask       # nonmask ids, mask map

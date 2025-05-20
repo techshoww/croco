@@ -126,7 +126,7 @@ class CroCoNet(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
             
-    def _encode_image(self, image, do_mask=False, return_all_blocks=False):
+    def _encode_image(self, image, nonmasks, do_mask=False, return_all_blocks=False):
         """
         image has B x 3 x img_size x img_size 
         do_mask: whether to perform masking or not
@@ -142,9 +142,13 @@ class CroCoNet(nn.Module):
         # apply masking 
         B,N,C = x.size()
         if do_mask:
-            masks = self.mask_generator(x)
-            x = x[~masks].view(B, -1, C)
-            posvis = pos[~masks].view(B, -1, 2)
+            # masks = self.mask_generator(x)
+            # x = x[~masks].view(B, -1, C)
+            # posvis = pos[~masks].view(B, -1, 2)
+
+            x = x[:,nonmasks,:].view(B,-1,C)
+            posvis = pos[:,nonmasks,:].view(B, -1, 2)
+            
         else:
             B,N,C = x.size()
             masks = torch.zeros((B,N), dtype=bool)
@@ -156,14 +160,14 @@ class CroCoNet(nn.Module):
                 x = blk(x, posvis)
                 out.append(x)
             out[-1] = self.enc_norm(out[-1])
-            return out, pos, masks
+            return out, pos, #masks
         else:
             for blk in self.enc_blocks:
                 x = blk(x, posvis)
             x = self.enc_norm(x)
-            return x, pos, masks
+            return x, pos, #masks
  
-    def _decoder(self, feat1, pos1, masks1, feat2, pos2, return_all_blocks=False):
+    def _decoder(self, feat1, pos1, nonmasks1, feat2, pos2, return_all_blocks=False):
         """
         return_all_blocks: if True, return the features at the end of every block 
                            instead of just the features from the last block (eg for some prediction heads)
@@ -175,12 +179,14 @@ class CroCoNet(nn.Module):
         f2 = self.decoder_embed(feat2)
         # append masked tokens to the sequence
         B,Nenc,C = visf1.size()
-        if masks1 is None: # downstreams
+        if nonmasks1 is None: # downstreams
             f1_ = visf1
         else: # pretraining 
-            Ntotal = masks1.size(1)
+            # Ntotal = masks1.size(1)
+            Ntotal = self.patch_embed.num_patches
             f1_ = self.mask_token.repeat(B, Ntotal, 1).to(dtype=visf1.dtype)
-            f1_[~masks1] = visf1.view(B * Nenc, C)
+            # f1_[~masks1] = visf1.view(B * Nenc, C)
+            f1_[:,nonmasks1,:] = visf1.view(B * Nenc, C)
         # add positional embedding
         if self.dec_pos_embed is not None:
             f1_ = f1_ + self.dec_pos_embed
@@ -210,7 +216,8 @@ class CroCoNet(nn.Module):
 
         h = w = imgs.shape[2] // p
         x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
-        x = torch.einsum('nchpwq->nhwpqc', x)
+        # x = torch.einsum('nchpwq->nhwpqc', x)
+        x = x.permute(0,2,4,3,5,1)
         x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
         
         return x
@@ -228,7 +235,7 @@ class CroCoNet(nn.Module):
         imgs = x.reshape(shape=(x.shape[0], channels, h * patch_size, h * patch_size))
         return imgs
 
-    def forward(self, img1, img2):
+    def forward(self, img1, img2, nonmask1):
         """
         img1: tensor of size B x 3 x img_size x img_size
         img2: tensor of size B x 3 x img_size x img_size
@@ -237,13 +244,13 @@ class CroCoNet(nn.Module):
         masks are also returned as B x N just in case 
         """
         # encoder of the masked first image 
-        feat1, pos1, mask1 = self._encode_image(img1, do_mask=True)
+        feat1, pos1 = self._encode_image(img1, nonmask1, do_mask=True)
         # encoder of the second image 
-        feat2, pos2, _ = self._encode_image(img2, do_mask=False)
+        feat2, pos2 = self._encode_image(img2, nonmask1, do_mask=False)
         # decoder 
-        decfeat = self._decoder(feat1, pos1, mask1, feat2, pos2)
+        decfeat = self._decoder(feat1, pos1, nonmask1, feat2, pos2)
         # prediction head 
         out = self.prediction_head(decfeat)
         # get target
         target = self.patchify(img1)
-        return out, mask1, target
+        return out,  target
